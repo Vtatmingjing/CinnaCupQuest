@@ -52,8 +52,45 @@ func _find_player() -> Node2D:
     return players[0]
 
 func _draw() -> void:
-    var outline := Color(0.04, 0.025, 0.015)
-    draw_circle(Vector2.ZERO, 8.0, outline)
-    draw_circle(Vector2.ZERO, 6.0, pickup_color)
-    draw_rect(Rect2(-2, -11, 4, 22), pickup_color.lightened(0.35))
-    draw_rect(Rect2(-11, -2, 22, 4), pickup_color.lightened(0.25))
+    match kind:
+        "gold":
+            _draw_coin()
+        "heal":
+            _draw_heal()
+        "shield":
+            _draw_shield()
+        _:
+            _draw_xp_crystal()
+
+func _draw_xp_crystal() -> void:
+    var outline := Color(0.02, 0.06, 0.035)
+    var h := 10.0 + minf(4.0, float(amount))
+    var w := 7.0 + minf(3.0, float(amount) * 0.5)
+    draw_polygon([Vector2(0, -h - 2), Vector2(w + 3, 0), Vector2(0, h + 2), Vector2(-w - 3, 0)], [outline])
+    draw_polygon([Vector2(0, -h), Vector2(w, 0), Vector2(0, h), Vector2(-w, 0)], [pickup_color])
+    draw_line(Vector2(0, -h + 2), Vector2(0, h - 2), pickup_color.lightened(0.45), 2.0)
+    draw_line(Vector2(-w + 2, 0), Vector2(w - 2, 0), Color(0.90, 1.0, 0.88, 0.65), 1.5)
+
+func _draw_coin() -> void:
+    var outline := Color(0.08, 0.045, 0.00)
+    draw_circle(Vector2.ZERO, 9.0, outline)
+    draw_circle(Vector2.ZERO, 7.0, Color(1.0, 0.76, 0.18))
+    draw_arc(Vector2.ZERO, 4.8, -0.8, 2.2, 14, Color(1.0, 0.94, 0.42), 2.0)
+    draw_rect(Rect2(-1.5, -6.0, 3.0, 12.0), Color(0.74, 0.42, 0.04, 0.55))
+
+func _draw_heal() -> void:
+    var outline := Color(0.12, 0.00, 0.02)
+    draw_circle(Vector2(-4.0, -3.0), 6.0, outline)
+    draw_circle(Vector2(4.0, -3.0), 6.0, outline)
+    draw_polygon([Vector2(-10, 0), Vector2(10, 0), Vector2(0, 12)], [outline])
+    draw_circle(Vector2(-4.0, -3.0), 4.5, Color(1.0, 0.28, 0.34))
+    draw_circle(Vector2(4.0, -3.0), 4.5, Color(1.0, 0.28, 0.34))
+    draw_polygon([Vector2(-8, 0), Vector2(8, 0), Vector2(0, 9)], [Color(1.0, 0.28, 0.34)])
+    draw_rect(Rect2(-1.5, -7.0, 3.0, 12.0), Color(1.0, 0.86, 0.90))
+    draw_rect(Rect2(-6.0, -2.5, 12.0, 3.0), Color(1.0, 0.86, 0.90))
+
+func _draw_shield() -> void:
+    var outline := Color(0.02, 0.06, 0.08)
+    draw_polygon([Vector2(0, -12), Vector2(10, -7), Vector2(8, 6), Vector2(0, 13), Vector2(-8, 6), Vector2(-10, -7)], [outline])
+    draw_polygon([Vector2(0, -9), Vector2(7, -5), Vector2(6, 5), Vector2(0, 10), Vector2(-6, 5), Vector2(-7, -5)], [Color(0.72, 0.95, 1.0)])
+    draw_line(Vector2(0, -8), Vector2(0, 9), Color(1.0, 1.0, 1.0, 0.55), 2.0)

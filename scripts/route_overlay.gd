@@ -91,6 +91,8 @@ func _room_name(room_type: String) -> String:
         "event": return "事件房"
         "shelf_boss": return "区域Boss"
         "boss": return "最终Boss"
+		"hextech_forge": return "锻造炉"
+		"hextech_shop": return "海克斯商店"
     return room_type
 
 func _room_hint(room_type: String) -> String:
@@ -103,4 +105,6 @@ func _room_hint(room_type: String) -> String:
         "event": return "问号小剧场"
         "shelf_boss": return "货架入口"
         "boss": return "点亮信标"
+		"hextech_forge": return "选符文强化"
+		"hextech_shop": return "花水晶购物"
     return "未知节点"

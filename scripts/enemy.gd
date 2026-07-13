@@ -5,6 +5,7 @@ signal died(enemy: CinnaEnemy)
 signal projectile_requested(position: Vector2, velocity: Vector2, damage: int, color: Color, ttl: float, label: String)
 signal hazard_requested(position: Vector2, kind: String, damage: int)
 signal damaged(position: Vector2, amount: int, critical: bool)
+signal split_requested(position: Vector2)
 
 const GRAVITY := 1080.0
 
@@ -26,13 +27,17 @@ var hurt_flash := 0.0
 var phase_timer := 0.0
 var jump_timer := 0.0
 var touch_cooldown := 0.0
+var direction_change_timer := 0.0
+var rotation_angle := 0.0
+var slow_timer := 0.0
+var mini_blob := false
 
 func _ready() -> void:
     add_to_group("enemies")
     collision_layer = 4
     collision_mask = 2 | 1
     var shape := RectangleShape2D.new()
-    shape.size = Vector2(28, 28) if not boss else Vector2(72, 86)
+    shape.size = Vector2(18, 18) if mini_blob else (Vector2(72, 86) if boss else Vector2(28, 28))
     var col := CollisionShape2D.new()
     col.shape = shape
     add_child(col)
@@ -56,6 +61,16 @@ func setup(new_kind: String, is_boss := false, new_modifier := "", new_depth := 
             boss = true; max_health = 13; speed = 82; damage = 2; score_value = 520; body_color = Color(0.72, 0.36, 0.84)
         "boss":
             boss = true; max_health = 18; speed = 70; damage = 2; score_value = 800; body_color = Color(0.88, 0.31, 0.12)
+		"syrup_blob":
+			max_health = 3; speed = 52; damage = 1; score_value = 110; body_color = Color(0.86, 0.55, 0.18)
+		"mini_syrup_blob":
+			mini_blob = true; max_health = 1; speed = 38; damage = 1; score_value = 5; body_color = Color(0.90, 0.68, 0.28)
+		"spice_imp":
+			max_health = 1; speed = 150; damage = 1; score_value = 130; body_color = Color(1.0, 0.35, 0.08)
+			direction_change_timer = randf_range(0.5, 1.2)
+		"crystal_sentry":
+			max_health = 5; speed = 0; damage = 2; score_value = 150; body_color = Color(0.62, 0.44, 1.0)
+			rotation_angle = 0.0; attack_cooldown = 2.0
     if boss:
         max_health += depth_level * 3
     else:
@@ -83,6 +98,12 @@ func _apply_elite_modifier() -> void:
             speed *= 1.08
             score_value += 35
             body_color = body_color.lerp(Color(0.58, 0.82, 1.0), 0.45)
+		"hextech":
+			max_health += 3
+			speed *= 1.12
+			damage += 1
+			score_value += 60
+			body_color = body_color.lerp(Color(0.72, 0.32, 0.84), 0.50)
 
 func _physics_process(delta: float) -> void:
     touch_cooldown = maxf(0.0, touch_cooldown - delta)
@@ -128,6 +149,20 @@ func _physics_process(delta: float) -> void:
 func _move_toward_player(delta: float, player: Node2D) -> void:
     var dx := player.global_position.x - global_position.x
     var target_speed := signf(dx) * speed if absf(dx) > 16.0 else 0.0
+	if slow_timer > 0.0:
+		slow_timer -= delta
+		target_speed *= 0.5
+	if kind == "crystal_sentry":
+		velocity.x = 0.0
+		return
+	if kind == "spice_imp":
+		direction_change_timer -= delta
+		if direction_change_timer <= 0.0:
+			direction_change_timer = randf_range(0.5, 1.2)
+			velocity.x = (1.0 if randf() < 0.7 else -1.0) * speed * signf(randf() - 0.5)
+		if randf() < 0.018:
+			hazard_requested.emit(global_position + Vector2(0, 24), "ember", 1)
+		return
     if kind == "ice":
         target_speed *= 0.75
     if boss and phase_timer > 2.2:
@@ -139,6 +174,15 @@ func _move_toward_player(delta: float, player: Node2D) -> void:
             velocity.y = -315.0
             jump_timer = randf_range(1.0, 1.6)
         elif elite_modifier == "bubbly" and jump_timer <= 0.0:
+		if elite_modifier == "hextech":
+			col = Color(0.72, 0.32, 0.84)
+			draw_rect(Rect2(-14, -31, 28, 5), Color(0.04, 0.03, 0.05))
+			draw_rect(Rect2(-11, -35, 6, 8), col)
+			draw_rect(Rect2(-2, -39, 6, 12), Color(0.88, 0.50, 1.0))
+			draw_rect(Rect2(8, -35, 6, 8), col)
+			draw_rect(Rect2(-18, -46, 4, 4), Color(1.0, 0.90, 0.20))
+			draw_rect(Rect2(14, -46, 4, 4), Color(1.0, 0.90, 0.20))
+			return
             velocity.y = -260.0
             jump_timer = randf_range(1.2, 2.0)
         elif boss and jump_timer <= 0.0 and randf() < 0.020:
@@ -151,6 +195,15 @@ func _should_start_attack(player: Node2D) -> bool:
     var dist := global_position.distance_to(player.global_position)
     if boss:
         if kind == "shelf_boss":
+	if kind == "crystal_sentry":
+		var target_angle = (player.global_position - global_position).angle()
+		rotation_angle = lerpf(rotation_angle, target_angle, 2.0 * delta)
+		if attack_cooldown <= 0.0 and phase_timer >= 2.0:
+			phase_timer = 0.0
+			attack_cooldown = 2.0
+			for spread in [-0.15, 0.0, 0.15]:
+				var v = Vector2(cos(rotation_angle + spread), sin(rotation_angle + spread)) * 220.0
+				projectile_requested.emit(global_position, v, damage, Color(0.72, 0.44, 1.0), 2.5, "X")
             return phase_timer >= 1.10
         return phase_timer >= 1.35
     match kind:
@@ -248,6 +301,8 @@ func take_damage(amount: int, source_pos := Vector2.ZERO, critical := false) -> 
     if health <= 0:
         remove_from_group("enemies")
         died.emit(self)
+	if kind == "syrup_blob":
+		split_requested.emit(global_position)
         queue_free()
     else:
         queue_redraw()
@@ -281,6 +336,23 @@ func _draw() -> void:
         draw_rect(Rect2(4, -6, 5, 5), outline)
         if kind == "cork":
             draw_rect(Rect2(-18, -25, 36, 8), Color(0.47, 0.24, 0.12))
+		if kind == "syrup_blob":
+			draw_rect(Rect2(-18, -20, 36, 36), outline)
+			draw_rect(Rect2(-14, -16, 28, 28), Color(0.86, 0.55, 0.18))
+			draw_rect(Rect2(-10, -12, 20, 18), Color(0.94, 0.70, 0.28))
+			draw_rect(Rect2(-3, -5, 6, 6), outline)
+		if kind == "mini_syrup_blob":
+			draw_rect(Rect2(-10, -11, 20, 20), outline)
+			draw_rect(Rect2(-8, -9, 16, 16), Color(0.90, 0.68, 0.28))
+		if kind == "spice_imp":
+			draw_rect(Rect2(-16, -22, 32, 32), outline)
+			draw_rect(Rect2(-12, -18, 24, 24), Color(1.0, 0.35, 0.08))
+			draw_rect(Rect2(-4, -28, 8, 8), Color(1.0, 0.95, 0.20))
+		if kind == "crystal_sentry":
+			draw_rect(Rect2(-22, -30, 44, 50), outline)
+			draw_rect(Rect2(-18, -26, 36, 42), Color(0.52, 0.34, 0.85))
+			draw_rect(Rect2(-8, -40, 16, 16), Color(0.72, 0.54, 1.0))
+			draw_rect(Rect2(-4, -36, 8, 8), Color(1.0, 0.90, 1.0))
         if elite_modifier != "":
             _draw_elite_crown()
         if health < max_health:
@@ -298,6 +370,15 @@ func _draw_elite_crown() -> void:
     if elite_modifier == "frosted":
         col = Color(0.75, 0.96, 1.0)
     elif elite_modifier == "bubbly":
+		if elite_modifier == "hextech":
+			col = Color(0.72, 0.32, 0.84)
+			draw_rect(Rect2(-14, -31, 28, 5), Color(0.04, 0.03, 0.05))
+			draw_rect(Rect2(-11, -35, 6, 8), col)
+			draw_rect(Rect2(-2, -39, 6, 12), Color(0.88, 0.50, 1.0))
+			draw_rect(Rect2(8, -35, 6, 8), col)
+			draw_rect(Rect2(-18, -46, 4, 4), Color(1.0, 0.90, 0.20))
+			draw_rect(Rect2(14, -46, 4, 4), Color(1.0, 0.90, 0.20))
+			return
         col = Color(0.50, 0.78, 1.0)
     draw_rect(Rect2(-14, -31, 28, 5), Color(0.04, 0.03, 0.025))
     draw_rect(Rect2(-11, -35, 6, 8), col)

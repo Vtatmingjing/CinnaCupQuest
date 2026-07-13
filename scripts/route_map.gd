@@ -87,4 +87,6 @@ func _short(room_type: String) -> String:
             return "MB"
         "boss":
             return "BOSS"
+		"hextech_forge": return "HF"
+		"hextech_shop": return "HS"
     return room_type.substr(0, 1).to_upper()

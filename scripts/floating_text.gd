@@ -8,6 +8,9 @@ var life := 0.75
 var start_life := 0.75
 var font_size := 18
 
+func _ready() -> void:
+    add_to_group("survivor_floating_text")
+
 func setup(new_text: String, new_color := Color(1.0, 0.90, 0.45), new_size := 18) -> void:
     text = new_text
     body_color = new_color

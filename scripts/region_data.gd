@@ -11,7 +11,7 @@ const REGIONS := {
         "right_platform_style": "mint",
         "bridge_style": "cinnamon",
         "accent": Color(1.0, 0.76, 0.24),
-        "enemy_pool": ["bubble", "ice", "lime"],
+        "enemy_pool": ["bubble", "ice", "lime", "syrup_blob"],
         "start_depth": 0
     },
     "bottle_shelf": {
@@ -23,7 +23,7 @@ const REGIONS := {
         "right_platform_style": "cinnamon",
         "bridge_style": "ice",
         "accent": Color(0.72, 0.32, 0.84),
-        "enemy_pool": ["cork", "ice", "lime", "bubble"],
+        "enemy_pool": ["cork", "ice", "lime", "bubble", "spice_imp", "crystal_sentry"],
         "start_depth": 6
     },
     "aroma_shrine": {

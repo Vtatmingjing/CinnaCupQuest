@@ -4,6 +4,7 @@ class_name CinnaHUD
 const ItemData := preload("res://scripts/item_data.gd")
 const RecipeData := preload("res://scripts/recipe_data.gd")
 const MetaProgress := preload("res://scripts/meta_progress.gd")
+const AugmentData := preload("res://scripts/hextech_augment_data.gd")
 const CharacterData := preload("res://scripts/character_data.gd")
 const RouteMapScene := preload("res://scripts/route_map.gd")
 const RouteOverlayScene := preload("res://scripts/route_overlay.gd")
@@ -138,7 +139,7 @@ func update_stats(player: CinnaPlayer) -> void:
     var hearts := ""
     for i in range(player.max_health):
         hearts += "♥" if i < player.health else "♡"
-    stat_label.text = "%s  Sh:%d  G:%03d  Sc:%05d  Dmg:%d" % [hearts, player.shield, player.gold, player.score, player.damage]
+    stat_label.text = "%s  盾:%d  金币:%03d  水晶:%d  分:%05d  伤害:%d" % [hearts, player.shield, player.gold, player.hextech_crystals, player.score, player.damage]
     var recipe_names := player.get_recipe_names()
     var skill_text := player.get_skill_status_text()
     if recipe_names.size() == 0:
@@ -317,6 +318,10 @@ func _room_label(room_type: String) -> String:
             return "MID BOSS"
         "boss":
             return "BOSS"
+		"hextech_forge":
+			return "锻造炉"
+		"hextech_shop":
+			return "海克斯商店"
     return room_type.to_upper()
 
 func _starter_text(meta: Dictionary) -> String:

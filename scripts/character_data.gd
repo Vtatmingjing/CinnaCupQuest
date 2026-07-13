@@ -4,7 +4,7 @@ class_name CinnaCharacterData
 const CHARACTERS := {
     "bartender": {
         "name": "小调酒师",
-        "tag": "平衡型 / 推荐开局",
+        "tag": "均衡型 / 推荐开局",
         "desc": "生命、速度、伤害都均衡，开局自带一滴蜂蜜。主动技能：摇壶爆发，近距离范围伤害。",
         "health_bonus": 0,
         "shield_bonus": 0,
@@ -22,8 +22,8 @@ const CHARACTERS := {
     },
     "ice_knight": {
         "name": "冰块骑士",
-        "tag": "防御型 / 新手稳杯",
-        "desc": "生命和护盾更高，速度慢一点。主动技能：冰杯守护，获得护盾并震开近身敌人。",
+        "tag": "防御型 / 新手稳定",
+        "desc": "生命和护盾更高，速度略慢。主动技能：冰杯守护，获得护盾并震开近身敌人。",
         "health_bonus": 1,
         "shield_bonus": 2,
         "speed_mult": 0.92,
@@ -103,9 +103,9 @@ static func menu_lines(selected_id: String) -> String:
     var lines := []
     var ids := get_all_ids()
     for i in range(ids.size()):
-        var cid := str(ids[i])
-        var marker := "▶" if cid == selected_id else " "
-        lines.append("%s %d. %s：%s" % [marker, i + 1, get_name(cid), get_tag(cid)])
+        var character_id := str(ids[i])
+        var marker := ">" if character_id == selected_id else " "
+        lines.append("%s %d. %s：%s" % [marker, i + 1, get_name(character_id), get_tag(character_id)])
     lines.append("")
     lines.append("当前角色：%s" % get_name(selected_id))
     lines.append(get_desc(selected_id))

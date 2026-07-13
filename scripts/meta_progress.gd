@@ -7,7 +7,7 @@ const STARTER_UNLOCKS := [
     {"shards": 4, "item": "mint", "name": "薄荷开局口袋"},
     {"shards": 8, "item": "ice", "name": "冰块护身符"},
     {"shards": 14, "item": "bubble", "name": "气泡二段跳券"},
-    {"shards": 22, "item": "ember", "name": "打火星芯种子"},
+    {"shards": 22, "item": "ember", "name": "打火星芽种子"},
     {"shards": 32, "item": "copper", "name": "铜制杯底保险"},
     {"shards": 42, "item": "vanilla", "name": "香草云软垫"},
     {"shards": 54, "item": "tonic", "name": "汤力水技能票"},
@@ -22,6 +22,7 @@ static func default_meta() -> Dictionary:
         "best_score": 0,
         "total_score": 0,
         "aroma_shards": 0,
+        "hextech_crystals": 0,
         "unlocked_starters": [],
         "discovered_items": [],
         "discovered_recipes": [],
@@ -129,8 +130,8 @@ static func get_starting_items(meta: Dictionary) -> Array:
 static func get_unlock_status_text(meta: Dictionary) -> String:
     var lines := []
     var shards := int(meta.get("aroma_shards", 0))
+    var unlocked: Array = meta.get("unlocked_starters", [])
     for unlock in STARTER_UNLOCKS:
-        var unlocked: Array = meta.get("unlocked_starters", [])
         var status := "已解锁" if unlocked.has(unlock["item"]) else "需要 %d 香气碎片，当前 %d" % [int(unlock["shards"]), shards]
         lines.append("%s：%s" % [unlock["name"], status])
     if lines.size() == 0:

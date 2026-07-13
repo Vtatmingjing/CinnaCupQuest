@@ -41,6 +41,21 @@ func _draw() -> void:
             draw_rect(Rect2(-6, -101, 12, 24), Color(1.0, 0.28, 0.10))
             draw_rect(Rect2(-3, -112, 6, 12), Color(1.0, 0.90, 0.34))
             draw_string(ThemeDB.fallback_font, Vector2(-54, -124), "AROMA BEACON", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1.0, 0.90, 0.56))
+		"hextech_forge":
+			draw_rect(Rect2(-32, -44 + y, 64, 56), outline)
+			draw_rect(Rect2(-26, -38 + y, 52, 44), Color(0.30, 0.12, 0.45))
+			draw_rect(Rect2(-18, -52 + y, 36, 16), Color(0.62, 0.34, 0.82))
+			draw_rect(Rect2(-8, -28 + y, 6, 6), Color(1.0, 0.85, 0.24))
+			draw_rect(Rect2(4, -28 + y, 6, 6), Color(1.0, 0.85, 0.24))
+			draw_string(ThemeDB.fallback_font, Vector2(-60, -66 + y), "海克斯锻造炉", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.82, 0.54, 1.0))
+		"hextech_shop":
+			draw_rect(Rect2(-30, -52 + y, 60, 68), outline)
+			draw_rect(Rect2(-23, -45 + y, 46, 56), Color(0.32, 0.16, 0.52))
+			draw_rect(Rect2(-18, -62 + y, 36, 18), Color(0.52, 0.28, 0.86))
+			draw_rect(Rect2(-14, -27 + y, 8, 8), outline)
+			draw_rect(Rect2(7, -27 + y, 8, 8), outline)
+			draw_rect(Rect2(-11, -10 + y, 22, 5), Color(0.82, 0.54, 1.0))
+			draw_string(ThemeDB.fallback_font, Vector2(-50, -76 + y), "海克斯商店", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.82, 0.54, 1.0))
         "chest":
             draw_rect(Rect2(-34, -32 + y, 68, 46), outline)
             draw_rect(Rect2(-28, -26 + y, 56, 34), Color(0.76, 0.40, 0.16))

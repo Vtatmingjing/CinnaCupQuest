@@ -25,6 +25,7 @@ func setup(new_kind: String, new_price := 0) -> void:
     price = new_price
     is_shop_item = price > 0
     queue_redraw()
+	var is_crystal_shop_item := crystal_price > 0
 
 func _process(delta: float) -> void:
     bob += delta

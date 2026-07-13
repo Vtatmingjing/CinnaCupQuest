@@ -45,6 +45,9 @@ var score := 0
 var gold := 20
 var inventory: Dictionary = {}
 var active_recipes: Dictionary = {}
+var hextech_crystals := 0
+var hextech_augments: Dictionary = {}
+var echo_attack_counter := 0
 var character_id := "bartender"
 var active_skill_id := "shaker_burst"
 var active_skill_name := "摇壶爆发"
@@ -193,6 +196,8 @@ func perform_attack() -> void:
             continue
         if absf(offset.x) <= x_range and absf(offset.y) <= y_range:
             var final_damage := damage
+			if hextech_augments.has("double_edged"):
+				final_damage *= 2
             if active_recipes.has("cinnamon_flame_cup"):
                 final_damage += 1
             var critical := randf() < _critical_chance()
@@ -201,6 +206,14 @@ func perform_attack() -> void:
             if enemy.has_method("take_damage"):
                 enemy.take_damage(final_damage, global_position, critical)
                 hit_enemy.emit(enemy.global_position, final_damage, critical)
+				if hextech_augments.has("echo_strike"):
+					echo_attack_counter += 1
+					if echo_attack_counter >= 3:
+						echo_attack_counter = 0
+						if enemy.has_method("take_damage"):
+							enemy.take_damage(final_damage, global_position, false)
+				if hextech_augments.has("frostfire_combo") and randf() < 0.20:
+					enemy.slow_timer = 2.0
                 apply_hitstop(0.035 if not critical else 0.065)
 
 func try_active_skill() -> bool:
@@ -276,6 +289,8 @@ func _critical_chance() -> float:
         chance += 0.05
     elif character_id == "lemon_gunner":
         chance += 0.08
+	if hextech_augments.has("lucky_find"):
+		chance += 0.10
     if active_recipes.has("bubble_crit"):
         chance += 0.18
         if not is_on_floor():
@@ -297,6 +312,10 @@ func take_damage(amount: int, source_x := 0.0) -> void:
         return
     invincible_timer = 0.75
     var remaining := amount
+	if hextech_augments.has("crystal_armor"):
+		remaining = maxi(1, remaining - 1)
+	if hextech_augments.has("double_edged"):
+		remaining = int(ceil(float(remaining) * 1.5))
     if shield > 0:
         var absorbed := mini(shield, remaining)
         shield -= absorbed
@@ -308,6 +327,11 @@ func take_damage(amount: int, source_x := 0.0) -> void:
         velocity.x = push_dir * 210.0
         velocity.y = minf(velocity.y, -170.0)
     if active_recipes.has("honey_guard") and health > 0:
+	if hextech_augments.has("cheat_death") and health - remaining <= 0:
+		health = 1
+		remaining = 0
+		invincible_timer = 1.5
+		hextech_augments.erase("cheat_death")
         shield += 1
     damaged.emit(global_position, amount)
     stats_changed.emit()
@@ -455,6 +479,9 @@ func reset_run() -> void:
     gold = 20
     inventory.clear()
     active_recipes.clear()
+	hextech_crystals = 0
+	hextech_augments.clear()
+	echo_attack_counter = 0
     character_id = "bartender"
     active_skill_id = "shaker_burst"
     active_skill_name = "摇壶爆发"
@@ -478,6 +505,40 @@ func reset_run() -> void:
     skill_flash_timer = 0.0
     stats_changed.emit()
     queue_redraw()
+func add_hextech_crystals(amount: int) -> void:
+	hextech_crystals += amount
+	stats_changed.emit()
+
+func spend_hextech_crystals(amount: int) -> bool:
+	if hextech_crystals < amount:
+		return false
+	hextech_crystals -= amount
+	stats_changed.emit()
+	return true
+
+func add_hextech_augment(augment_id: String) -> void:
+	hextech_augments[augment_id] = true
+	_apply_augment_effect(augment_id)
+	stats_changed.emit()
+
+func has_hextech_augment(augment_id: String) -> bool:
+	return hextech_augments.has(augment_id)
+
+func _apply_augment_effect(augment_id: String) -> void:
+	match augment_id:
+		"swift_steps":
+			speed *= 1.15
+		"sturdy_shell":
+			max_health += 2
+			health = mini(max_health, health + 2)
+		"quick_hands":
+			attack_cooldown_value = maxf(0.10, attack_cooldown_value * 0.85)
+		"overflowing_cup":
+			damage += 1
+			shield += 1
+		"crystal_pocket":
+			gold += 5
+			hextech_crystals += 2
 
 func get_recipe_names() -> Array:
     var names := []

@@ -19,7 +19,18 @@ const SFX := {
     "defeat": {"freq": 140.0, "duration": 0.38, "shape": "fall", "volume": 0.15}
 }
 
+var muted := false
+
+func set_muted(value: bool) -> void:
+    muted = value
+
+func toggle_muted() -> bool:
+    muted = not muted
+    return muted
+
 func play_sfx(key: String) -> void:
+    if muted:
+        return
     if not SFX.has(key):
         return
     var data: Dictionary = SFX[key]

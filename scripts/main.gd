@@ -17,6 +17,8 @@ const RecipeData := preload("res://scripts/recipe_data.gd")
 const MetaProgress := preload("res://scripts/meta_progress.gd")
 const CharacterData := preload("res://scripts/character_data.gd")
 const RegionData := preload("res://scripts/region_data.gd")
+const AugmentData := preload("res://scripts/hextech_augment_data.gd")
+const ForgeUIScene := preload("res://scripts/hextech_forge_ui.gd")
 
 var player: CinnaPlayer
 var hud: CinnaHUD
@@ -50,6 +52,15 @@ var shake_strength := 0.0
 var mid_boss_cleared := false
 var victory_timer := 0.0
 var tutorial_seen: Dictionary = {}
+var forge_ui: CinnaForgeUI
+var current_augment_options: Array = []
+var awaiting_augment_choice := false
+var hextech_forge_milestones := {3: "silver", 6: "silver", 9: "gold"}
+var elite_spawn_warning_timer := 0.0
+var elite_spawn_threshold := 0.0
+var elite_spawned_this_room := false
+var elite_warning_active := false
+const ELITE_WARNING_TIME := 2.5
 
 func _ready() -> void:
     _ensure_input_map()
@@ -65,6 +76,8 @@ func _process(delta: float) -> void:
             _handle_menu_input()
         "playing":
             _handle_playing_input()
+			if not game_finished:
+				_update_elite_timer(delta)
             _handle_choice_input()
         "paused":
             _handle_pause_input()
@@ -137,6 +150,9 @@ func _build_world() -> void:
 
     hud = HUDScene.new()
     add_child(hud)
+	forge_ui = ForgeUIScene.new()
+	add_child(forge_ui)
+	forge_ui.augment_chosen.connect(_on_augment_chosen)
 
 func _show_title_menu() -> void:
     game_state = "menu"
@@ -150,6 +166,8 @@ func _show_title_menu() -> void:
     player.set_controls_enabled(false)
     _set_room_actors_active(false)
     hud.hide_choices()
+	if forge_ui != null:
+		forge_ui.hide_forge()
     hud.hide_overlay()
     hud.hide_route_overlay()
     hud.hide_tutorial()
@@ -374,6 +392,16 @@ func _spawn_room(room_type: String) -> void:
     if hud != null:
         hud.hide_route_overlay()
     current_room_type = room_type
+t# Hextech Forge override
+	if room_type != "shelf_boss" and room_type != "boss":
+		if hextech_forge_milestones.has(current_depth):
+			room_type = "hextech_forge"
+			current_room_type = "hextech_forge"
+	# Hextech Forge override at milestone rooms
+	if room_type != "shelf_boss" and room_type != "boss":
+		if hextech_forge_milestones.has(current_depth):
+			room_type = "hextech_forge"
+			current_room_type = "hextech_forge"
     current_region_id = RegionData.get_region_id(current_depth, total_rooms)
     if background != null:
         background.set_region(current_region_id)
@@ -394,8 +422,12 @@ func _spawn_room(room_type: String) -> void:
 
     match room_type:
         "fight":
+			_reset_elite_timer()
             _spawn_enemies(2 + int(current_depth / 2), false, "")
             hud.show_message("%s：%s" % [RegionData.get_name(current_region_id), RegionData.get_subtitle(current_region_id)], 2.4)
+			if player.has_hextech_augment("hextech_shield"):
+				player.shield += 1
+				player.stats_changed.emit()
             door.set_open(false)
         "elite":
             _spawn_enemies(3 + int(current_depth / 2), false, current_elite_modifier)
@@ -416,6 +448,11 @@ func _spawn_room(room_type: String) -> void:
             hud.show_message("Rest Stop: honey, warmth, tiny victory snacks.", 2.0)
             _offer_path_choices()
         "shop":
+		"hextech_shop":
+			_spawn_decor(Vector2(270, 718), "hextech_shop", "海克斯商店")
+			_spawn_hextech_shop_items()
+			hud.show_message("海克斯商店：花费水晶购买高价值配料！", 2.6)
+			_offer_path_choices()
             _spawn_decor(Vector2(270, 718), "shopkeeper", "brush items to buy")
             _spawn_shop_items()
             hud.show_message("Shop: walk into an item to buy it. No haggling with tiny spoons.", 2.6)
@@ -424,6 +461,16 @@ func _spawn_room(room_type: String) -> void:
         "event":
             _spawn_decor(Vector2(270, 720), "event", "press 1/2/3")
             _start_event()
+		"hextech_forge":
+			_spawn_decor(Vector2(270, 726), "hextech_forge", "海克斯锻造炉")
+			hud.show_message("海克斯锻造炉：选择一项符文强化！", 3.0)
+			_show_tutorial_once("forge", "锻造提示：符文效果整个冒险有效。")
+			_start_hextech_forge()
+		"hextech_forge":
+			_spawn_decor(Vector2(270, 726), "hextech_forge", "海克斯锻造炉")
+			hud.show_message("海克斯锻造炉：选择一项符文强化！", 3.0)
+			_show_tutorial_once("forge", "锻造提示：符文效果整个冒险有效。")
+			_start_hextech_forge()
         "shelf_boss":
             _spawn_decor(Vector2(270, 782), "beacon", "BOTTLE GATE")
             _spawn_enemy(Vector2(382, 748), "shelf_boss", true, "")
@@ -445,6 +492,8 @@ func _spawn_room(room_type: String) -> void:
 func _clear_room() -> void:
     if hud != null:
         hud.hide_choices()
+	if forge_ui != null:
+		forge_ui.hide_forge()
     for child in get_tree().get_nodes_in_group("room_content"):
         if is_instance_valid(child):
             child.queue_free()
@@ -535,7 +584,14 @@ func _spawn_enemy(pos: Vector2, kind: String, is_boss := false, modifier := "") 
     enemy.died.connect(_on_enemy_died)
     enemy.projectile_requested.connect(_on_enemy_projectile_requested)
     enemy.hazard_requested.connect(_on_enemy_hazard_requested)
+tenemy.split_requested.connect(_on_enemy_split)
     enemy.damaged.connect(_on_enemy_damaged)
+	func _on_enemy_split(pos: Vector2) -> void:
+		if game_state != "playing":
+			return
+		for i in range(2):
+			var offset := Vector2(randf_range(-26, 26), randf_range(-14, 14))
+			_spawn_enemy(pos + offset, "mini_syrup_blob", false, "")
     add_child(enemy)
     enemies_alive += 1
 
@@ -556,7 +612,7 @@ func _apply_difficulty_to_enemy(enemy: CinnaEnemy) -> void:
 
 func _spawn_item(pos: Vector2, kind: String, price := 0) -> void:
     var item: CinnaItemPickup = ItemScene.new()
-    item.setup(kind, price)
+    item.setup(kind, price, crystal_price)
     item.position = pos
     item.add_to_group("room_content")
     item.picked.connect(_on_item_picked)
@@ -575,6 +631,21 @@ func _spawn_shop_items() -> void:
         var price := CinnaItemData.get_price(kind) + current_depth * 3
         _spawn_item(Vector2(150 + i * 120, 690), kind, price)
 
+func _spawn_hextech_shop_items() -> void:
+	var used := {}
+	for i in range(3):
+		var kind := CinnaItemData.random_shop_item(current_depth + 2)
+		var guard := 0
+		while used.has(kind) and guard < 12:
+			kind = CinnaItemData.random_shop_item(current_depth + 2)
+			guard += 1
+		used[kind] = true
+		var crystal_cost := randi_range(2, 6)
+		if CinnaItemData.get_rarity(kind) == "rare":
+			crystal_cost = randi_range(4, 8)
+		elif CinnaItemData.get_rarity(kind) == "legendary":
+			crystal_cost = randi_range(6, 12)
+		_spawn_item(Vector2(150 + i * 120, 690), kind, 0, crystal_cost)
 func _spawn_decor(pos: Vector2, kind: String, label := "") -> void:
     var decor: CinnaDecor = DecorScene.new()
     decor.setup(kind, label)
@@ -744,6 +815,7 @@ func _resolve_event_choice(index: int) -> void:
     _play_sound("route")
     _offer_path_choices()
 
+func _reset_elite_timer() -> void:	elite_spawned_this_room = false	elite_warning_active = false	var base_time := randf_range(15.0, 25.0)	var reduction := current_depth * 0.5	elite_spawn_threshold = maxf(7.0, base_time - reduction)	elite_spawn_warning_timer = 0.0func _update_elite_timer(delta: float) -> void:	if current_room_type != "fight" or elite_spawned_this_room:		return	elite_spawn_warning_timer += delta	if not elite_warning_active and elite_spawn_warning_timer >= elite_spawn_threshold:		elite_warning_active = true		hud.show_message("海克斯能量波动！精英怪物即将降临！", 2.5)		_shake(6.0, 0.3)	if elite_warning_active and elite_spawn_warning_timer >= elite_spawn_threshold + ELITE_WARNING_TIME:		_spawn_hextech_elite()func _spawn_hextech_elite() -> void:	elite_spawned_this_room = true	var kinds := RegionData.get_enemy_pool(current_region_id)	var kind := str(kinds[randi() % kinds.size()])	if kind == "boss" or kind == "shelf_boss":		kind = "cork"	var x := randi_range(130, 410)	_spawn_enemy(Vector2(x, 755), kind, false, "hextech")	_spawn_floating_text(Vector2(270, 720), "海克斯精英！", Color(0.72, 0.32, 0.84), 26)	_shake(8.0, 0.25)	_play_sound("skill")	hud.show_message("海克斯精英降临！击败它获取海克斯水晶！", 3.0)func _start_hextech_forge() -> void:	var tier := str(hextech_forge_milestones.get(current_depth, "silver"))	current_augment_options = AugmentData.get_random_options(3, tier)	awaiting_augment_choice = true	awaiting_path_choice = false	if player != null:		player.set_controls_enabled(false)	_set_room_actors_active(false)	forge_ui.show_forge(current_augment_options)	player.add_hextech_crystals(2)	_play_sound("recipe")func _on_augment_chosen(augment_id: String) -> void:	if not awaiting_augment_choice:		return	awaiting_augment_choice = false	player.add_hextech_augment(augment_id)	var tier_data = AugmentData.get_tier_data(AugmentData.get_tier(augment_id))	var aug_name = AugmentData.get_name(augment_id)	_spawn_floating_text(player.global_position + Vector2(-50, -80), "[" + tier_data.zh + "] " + aug_name, tier_data.color, 22)	_play_sound("recipe")	hud.show_message("获得符文：[" + tier_data.zh + "] " + aug_name + "：" + AugmentData.get_desc(augment_id), 4.0)	forge_ui.hide_forge()	player.heal(1)	_offer_path_choices()
 func _offer_path_choices() -> void:
     if current_depth >= total_rooms - 2:
         selected_next_room = "boss"
@@ -754,6 +826,8 @@ func _offer_path_choices() -> void:
         if player != null:
             player.set_controls_enabled(true)
         hud.hide_choices()
+	if forge_ui != null:
+		forge_ui.hide_forge()
         hud.hide_route_overlay()
         hud.update_route_map(current_depth, total_rooms, ["boss"], "boss", RegionData.get_name(current_region_id))
         hud.show_message("The Aroma Beacon calls. Enter the golden gate!", 2.5)
@@ -768,6 +842,8 @@ func _offer_path_choices() -> void:
         if player != null:
             player.set_controls_enabled(true)
         hud.hide_choices()
+	if forge_ui != null:
+		forge_ui.hide_forge()
         hud.hide_route_overlay()
         hud.update_route_map(current_depth, total_rooms, ["shelf_boss"], "shelf_boss", RegionData.get_name(current_region_id))
         hud.show_message("Bottle Gate discovered: enter the mid-boss lift!", 2.6)
@@ -793,6 +869,8 @@ func _offer_path_choices() -> void:
 func _generate_path_choices() -> Array:
     var pool := ["fight", "fight", "elite", "treasure", "shop", "event", "rest"]
     pool.shuffle()
+		if current_depth >= 6:
+			pool.append("hextech_shop")
     var result := []
     for room_type in pool:
         if result.size() >= 3:
@@ -823,6 +901,10 @@ func _room_display_name(room_type: String) -> String:
         "boss":
             return "Boss 房：点亮香气信标"
     return room_type
+		"hextech_forge":
+			return "锻造炉：选符文"
+		"hextech_shop":
+			return "海克斯商店：水晶购物"
 
 func _handle_choice_input() -> void:
     var chosen := -1
@@ -832,6 +914,8 @@ func _handle_choice_input() -> void:
         chosen = 1
     elif Input.is_action_just_pressed("choice_3"):
         chosen = 2
+	if awaiting_augment_choice:
+		return
     if chosen < 0:
         return
 
@@ -848,6 +932,8 @@ func _handle_choice_input() -> void:
             player.set_controls_enabled(true)
         _set_room_actors_active(true)
         hud.hide_choices()
+	if forge_ui != null:
+		forge_ui.hide_forge()
         hud.hide_route_overlay()
         hud.update_route_map(current_depth, total_rooms, path_choices, selected_next_room, RegionData.get_name(current_region_id))
         _play_sound("route")
@@ -895,10 +981,19 @@ func _on_enemy_died(enemy: CinnaEnemy) -> void:
         return
 
     var gold_reward := randi_range(6, 14)
+$(cat /tmp/p6.txt)
     if current_room_type == "elite":
         gold_reward += randi_range(8, 14)
     player.add_gold(gold_reward)
 
+	if enemy.elite_modifier == "hextech":
+		var crystal_count := randi_range(1, 3)
+		player.add_hextech_crystals(crystal_count)
+		_spawn_floating_text(enemy.global_position + Vector2(-10, -72), "+" + str(crystal_count) + " 海克斯水晶", Color(0.72, 0.32, 0.84), 20)
+		_spawn_item(enemy.global_position + Vector2(-28, -40), CinnaItemData.random_reward_item(current_depth + 2, "elite"))
+		_spawn_item(enemy.global_position + Vector2(28, -40), CinnaItemData.random_reward_item(current_depth + 2, "elite"))
+		if player.has_hextech_augment("vampiric_spoon"):
+			player.heal(2)
     if enemies_alive <= 0:
         var reward_kind := CinnaItemData.random_reward_item(current_depth, current_room_type)
         _spawn_item(enemy.global_position + Vector2(0, -35), reward_kind)
@@ -963,6 +1058,9 @@ func _on_player_dashed(pos: Vector2, facing: int) -> void:
         return
     _play_sound("dash")
     if player.active_recipes.has("ice_mint_storm"):
+	if player.has_hextech_augment("rolling_pin"):
+		_spawn_hazard(pos + Vector2(facing * 20, 44), "ember", 1)
+		_spawn_hazard(pos + Vector2(facing * 60, 44), "ember", 1)
         _spawn_ice_spark(pos + Vector2(-20 * facing, 10), facing)
 
 func _on_player_damaged(pos: Vector2, amount: int) -> void:
@@ -1055,6 +1153,8 @@ func _begin_victory_sequence() -> void:
     player.set_controls_enabled(false)
     _set_room_actors_active(false)
     hud.hide_choices()
+	if forge_ui != null:
+		forge_ui.hide_forge()
     hud.hide_route_overlay()
     hud.show_victory_ceremony(player, RegionData.get_name(current_region_id))
     _shake(10.0, 0.30)
@@ -1069,6 +1169,8 @@ func _finish_run(won: bool) -> void:
     player.set_controls_enabled(false)
     _set_room_actors_active(false)
     hud.hide_choices()
+	if forge_ui != null:
+		forge_ui.hide_forge()
     if door != null:
         door.set_open(won)
     var shards := MetaProgress.calculate_shards(won, current_depth, player.score)
